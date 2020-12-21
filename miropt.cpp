@@ -1,4 +1,3 @@
-#pragma once
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/InitAllDialects.h"
@@ -46,5 +45,6 @@ int main(int argc, char **argv) {
   registry.insert<mlir::PtrDialect>();
   registry.insert<mlir::StandardOpsDialect>();
   registry.insert<mlir::AffineDialect>();
+  mlir::registerLowerHiPass();
   return failed(mlir::MlirOptMain(argc, argv, "Standalone optimizer driver\n",registry, true));
 }

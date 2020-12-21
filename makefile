@@ -10,16 +10,16 @@ clean:
 # build that sets up stuff using CMake
 build/miropt.o: miropt.cpp
 	mkdir -p build
-	clang++ -fsanitize=address -fsanitize=undefined  -fno-exceptions -fno-rtti \
+	clang++ -g -fsanitize=address -fsanitize=undefined  -fno-exceptions -fno-rtti \
 	  -I/usr/local/include -I./ miropt.cpp -c -o build/miropt.o
 
 build/Dialects.o: Dialects.cpp Dialects.h
 	mkdir -p build
-	clang++ -fsanitize=address -fsanitize=undefined  -fno-exceptions -fno-rtti \
+	clang++ -g -fsanitize=address -fsanitize=undefined  -fno-exceptions -fno-rtti \
 	  -I/usr/local/include -I./ Dialects.cpp -c -o build/Dialects.o
 
 mir.out:  build/miropt.o build/Dialects.o Dialects.h
-	time clang++  -fsanitize=address -fsanitize=undefined -L/usr/local/lib -fuse-ld=lld \
+	time clang++  -g -fsanitize=address -fsanitize=undefined -L/usr/local/lib -fuse-ld=lld \
 	  -std=c++17  -Iinclude -o mir.out  \
 	  build/miropt.o build/Dialects.o      \
 	  -lLLVMCore                              \

@@ -49,7 +49,7 @@ class HpnodeType
     static HpnodeType get(MLIRContext *context) { return Base::get(context); }
 };
 
-class HpAllocOp : public Op<HpAllocOp, OpTrait::OneResult> {
+class HpAllocOp : public Op<HpAllocOp, OpTrait::OneResult, OpTrait::ZeroOperands> {
    public:
     using Op::Op;
     static StringRef getOperationName() { return "hi.hpAlloc"; };
@@ -63,7 +63,7 @@ class HpAllocOp : public Op<HpAllocOp, OpTrait::OneResult> {
     };
 };
 
-class HpStoreOp : public Op<HpStoreOp, OpTrait::OneResult> {
+class HpStoreOp : public Op<HpStoreOp, OpTrait::OneResult, OpTrait::OneOperand> {
    public:
     using Op::Op;
     static StringRef getOperationName() { return "hi.hpStore"; };
@@ -78,6 +78,18 @@ class HpStoreOp : public Op<HpStoreOp, OpTrait::OneResult> {
             return failure();
         }
         result.addTypes(HpnodeType::get(parser.getBuilder().getContext()));
+        return success();
+    };
+};
+
+class BadLoweringOp : public Op<BadLoweringOp, OpTrait::ZeroResult, OpTrait::ZeroOperands> {
+   public:
+    using Op::Op;
+    static StringRef getOperationName() { return "hi.badLowering"; };
+    void print(OpAsmPrinter &p) {
+        return p.printGenericOp(this->getOperation());
+    }
+    static ParseResult parse(OpAsmParser &parser, OperationState &result) {
         return success();
     };
 };
@@ -124,7 +136,7 @@ class IntToPtrOp
     : public Op<IntToPtrOp, OpTrait::OneResult, OpTrait::OneOperand> {
    public:
     using Op::Op;
-    static StringRef getOperationName() { return "ptr.inttoptr"; };
+    static StringRef getOperationName() { return "ptr.int2ptr"; };
     static void build(mlir::OpBuilder &builder, mlir::OperationState &state,
                       Value vint) {
         assert(vint.getType().isa<IntegerType>());
@@ -136,5 +148,8 @@ class IntToPtrOp
     }
 };
 
+// === Lowering Pass ===
+std::unique_ptr<mlir::Pass> createLowerHiPass();
+void registerLowerHiPass();
 
 }  // namespace mlir
