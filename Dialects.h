@@ -97,6 +97,19 @@ class BadLoweringOp
     };
 };
 
+class NoLoweringOp
+    : public Op<BadLoweringOp, OpTrait::ZeroResult, OpTrait::ZeroOperands> {
+   public:
+    using Op::Op;
+    static StringRef getOperationName() { return "hi.noLowering"; };
+    void print(OpAsmPrinter &p) {
+        return p.printGenericOp(this->getOperation());
+    }
+    static ParseResult parse(OpAsmParser &parser, OperationState &result) {
+        return success();
+    };
+};
+
 // === PTR DIALECT ===
 // === PTR DIALECT ===
 // === PTR DIALECT ===

@@ -304,7 +304,7 @@ struct LowerHiPass : public Pass {
         patterns.insert<HpAllocOpConversionPattern>(tycon, &getContext());
         patterns.insert<BadLoweringConversionPattern>(tycon, &getContext());
 
-        if (failed(mlir::applyPartialConversion(getOperation(), target,
+        if (failed(mlir::applyFullConversion(getOperation(), target,
                                                 std::move(patterns)))) {
             llvm::errs() << "\n===Hi lowering failed at Conversion===\n";
             getOperation()->print(llvm::errs());
