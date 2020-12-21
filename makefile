@@ -1,0 +1,215 @@
+.PHONY := all clean
+LLVMFLAGS := $(shell eval /usr/local/bin/llvm-config --cxxflags --libs)
+
+all: mir.out
+
+clean:
+	rm -rf build/
+
+# All compile flags found by running `make --trace` on a `github.com/bollu/lz`
+# build that sets up stuff using CMake
+build/miropt.o: miropt.cpp
+	mkdir -p build
+	clang++ -fsanitize=address -fsanitize=undefined  -fno-exceptions -fno-rtti \
+	  -I/usr/local/include -I./ miropt.cpp -c -o build/miropt.o
+
+build/Dialects.o: Dialects.cpp Dialects.h
+	mkdir -p build
+	clang++ -fsanitize=address -fsanitize=undefined  -fno-exceptions -fno-rtti \
+	  -I/usr/local/include -I./ Dialects.cpp -c -o build/Dialects.o
+
+mir.out:  build/miropt.o build/Dialects.o Dialects.h
+	time clang++  -fsanitize=address -fsanitize=undefined -L/usr/local/lib -fuse-ld=lld \
+	  -std=c++17  -Iinclude -o mir.out  \
+	  build/miropt.o build/Dialects.o      \
+	  -lLLVMCore                              \
+	  -lLLVMSupport                           \
+	  -lLLVMX86CodeGen                        \
+	  -lLLVMX86Desc                           \
+	  -lLLVMX86Info                           \
+	  -lLLVMOrcJIT                            \
+	  -lLLVMExecutionEngine                   \
+	  -lLLVMInterpreter                       \
+	  -lLLVMX86CodeGen                        \
+	  -lLLVMX86AsmParser                      \
+	  -lLLVMX86Desc                           \
+	  -lLLVMX86Disassembler                   \
+	  -lLLVMX86Info -lpthread                 \
+	  -lMLIRAffine                            \
+	  -lMLIRAffineEDSC                        \
+	  -lMLIRAffineTransforms                  \
+	  -lMLIRAffineUtils                       \
+	  -lMLIRAsync                             \
+	  -lMLIRAsyncTransforms                   \
+	  -lMLIRAVX512                            \
+	  -lMLIRGPU                               \
+	  -lMLIRLinalgAnalysis                    \
+	  -lMLIRLinalgEDSC                        \
+	  -lMLIRLinalg                            \
+	  -lMLIRLinalgTransforms                  \
+	  -lMLIRLinalgUtils                       \
+	  -lMLIRLLVMIRTransforms                  \
+	  -lMLIRLLVMIR                            \
+	  -lMLIRLLVMAVX512                        \
+	  -lMLIRNVVMIR                            \
+	  -lMLIRROCDLIR                           \
+	  -lMLIROpenACC                           \
+	  -lMLIROpenMP                            \
+	  -lMLIRPDL                               \
+	  -lMLIRPDLInterp                         \
+	  -lMLIRQuant                             \
+	  -lMLIRSCF                               \
+	  -lMLIRSCFTransforms                     \
+	  -lMLIRSDBM                              \
+	  -lMLIRShape                             \
+	  -lMLIRShapeOpsTransforms                \
+	  -lMLIRSPIRV                             \
+	  -lMLIRSPIRVModuleCombiner               \
+	  -lMLIRSPIRVSerialization                \
+	  -lMLIRSPIRVTransforms                   \
+	  -lMLIRStandard                          \
+	  -lMLIRStandardOpsTransforms             \
+	  -lMLIRTosa                              \
+	  -lMLIRTosaTransforms                    \
+	  -lMLIRVector                            \
+	  -lMLIRTosaTestPasses                    \
+	  -lMLIRAffineToStandard                  \
+	  -lMLIRAsyncToLLVM                       \
+	  -lMLIRAVX512ToLLVM                      \
+	  -lMLIRGPUToGPURuntimeTransforms         \
+	  -lMLIRGPUToNVVMTransforms               \
+	  -lMLIRGPUToROCDLTransforms              \
+	  -lMLIRGPUToSPIRVTransforms              \
+	  -lMLIRGPUToVulkanTransforms             \
+	  -lMLIRLinalgToLLVM                      \
+	  -lMLIRLinalgToSPIRVTransforms           \
+	  -lMLIRLinalgToStandard                  \
+	  -lMLIROpenMPToLLVM                      \
+	  -lMLIRPDLToPDLInterp                    \
+	  -lMLIRSCFToGPU                          \
+	  -lMLIRSCFToOpenMP                       \
+	  -lMLIRSCFToSPIRV                        \
+	  -lMLIRSCFToStandard                     \
+	  -lMLIRShapeToStandard                   \
+	  -lMLIRSPIRVToLLVM                       \
+	  -lMLIRStandardToLLVM                    \
+	  -lMLIRStandardToSPIRVTransforms         \
+	  -lMLIRVectorToROCDL                     \
+	  -lMLIRVectorToLLVM                      \
+	  -lMLIRVectorToSCF                       \
+	  -lMLIRVectorToSPIRV                     \
+	  -lMLIRTranslation                       \
+	  -lMLIROptLib                            \
+	  -lMLIRAnalysis                          \
+	  -lMLIRCallInterfaces                    \
+	  -lMLIRExecutionEngine                   \
+	  -lMLIRIR                                \
+	  -lMLIRParser                            \
+	  -lMLIRPass                              \
+	  -lMLIRSideEffectInterfaces              \
+	  -lMLIRTargetLLVMIR                      \
+	  -lMLIRTransforms                        \
+	  -lMLIRSupport                           \
+	  -lMLIRLinalgAnalysis                    \
+	  -lMLIRTosa                              \
+	  -lMLIRQuant                             \
+	  -lMLIRAsync                             \
+	  -lMLIRAVX512                            \
+	  -lMLIRLLVMAVX512                        \
+	  -lMLIRNVVMIR                            \
+	  -lMLIRROCDLIR                           \
+	  -lMLIRSPIRVSerialization                \
+	  -lMLIRVectorToLLVM                      \
+	  -lMLIRLinalgUtils                       \
+	  -lMLIRLinalgEDSC                        \
+	  -lMLIRPDLInterp                         \
+	  -lMLIRPDL                               \
+	  -lMLIRAffineToStandard                  \
+	  -lMLIRShape                             \
+	  -lMLIRDialect                           \
+	  -lMLIRGPU                               \
+	  -lMLIRStandardToLLVM                    \
+	  -lMLIRSPIRV                             \
+	  -lMLIRTransforms                        \
+	  -lMLIRVector                            \
+	  -lMLIRAffineEDSC                        \
+	  -lMLIRLinalg                            \
+	  -lMLIRTransformUtils                    \
+	  -lMLIRLoopAnalysis                      \
+	  -lMLIRPresburger                        \
+	  -lMLIRRewrite                           \
+	  -lMLIRCopyOpInterface                   \
+	  -lLLVMX86CodeGen                        \
+	  -lLLVMAsmPrinter                        \
+	  -lLLVMDebugInfoDWARF                    \
+	  -lLLVMGlobalISel                        \
+	  -lLLVMSelectionDAG                      \
+	  -lLLVMCodeGen                           \
+	  -lLLVMCFGuard                           \
+	  -lLLVMX86Desc                           \
+	  -lLLVMMCDisassembler                    \
+	  -lLLVMX86Info                           \
+	  -lLLVMOrcJIT                            \
+	  -lLLVMPasses                            \
+	  -lLLVMHelloNew                          \
+	  -lLLVMObjCARCOpts                       \
+	  -lLLVMExecutionEngine                   \
+	  -lLLVMRuntimeDyld                       \
+	  -lMLIRTargetLLVMIRModuleTranslation     \
+	  -lMLIRLLVMIRTransforms                  \
+	  -lMLIRPass                              \
+	  -lMLIRAnalysis                          \
+	  -lMLIRAffine                            \
+	  -lMLIRSCF                               \
+	  -lMLIRStandard                          \
+	  -lMLIRViewLikeInterface                 \
+	  -lMLIRVectorInterfaces                  \
+	  -lMLIREDSC                              \
+	  -lMLIRLoopLikeInterface                 \
+	  -lMLIRInferTypeOpInterface              \
+	  -lMLIRLLVMIR                            \
+	  -lMLIRCallInterfaces                    \
+	  -lMLIRSideEffectInterfaces              \
+	  -lMLIRControlFlowInterfaces             \
+	  -lMLIROpenMP                            \
+	  -lMLIRTranslation                       \
+	  -lMLIRParser                            \
+	  -lMLIRIR                                \
+	  -lMLIRSupport                           \
+	  -lLLVMTarget                            \
+	  -lLLVMJITLink                           \
+	  -lLLVMOrcTargetProcess                  \
+	  -lLLVMOrcShared                         \
+	  -lLLVMCoroutines                        \
+	  -lLLVMipo                               \
+	  -lLLVMBitWriter                         \
+	  -lLLVMScalarOpts                        \
+	  -lLLVMAggressiveInstCombine             \
+	  -lLLVMInstCombine                       \
+	  -lLLVMVectorize                         \
+	  -lLLVMIRReader                          \
+	  -lLLVMAsmParser                         \
+	  -lLLVMInstrumentation                   \
+	  -lLLVMFrontendOpenMP                    \
+	  -lLLVMLinker                            \
+	  -lLLVMTransformUtils                    \
+	  -lLLVMAnalysis                          \
+	  -lLLVMProfileData                       \
+	  -lLLVMObject                            \
+	  -lLLVMBitReader                         \
+	  -lLLVMCore                              \
+	  -lLLVMRemarks                           \
+	  -lLLVMBitstreamReader                   \
+	  -lLLVMMCParser                          \
+	  -lLLVMMC                                \
+	  -lLLVMDebugInfoCodeView                 \
+	  -lLLVMDebugInfoMSF                      \
+	  -lLLVMTextAPI                           \
+	  -lLLVMBinaryFormat                      \
+	  -lLLVMSupport \
+	  -lLLVMDemangle \
+	  -lrt \
+	  -ldl \
+	  -lpthread \
+	  -lm \
+	  -ltinfo
