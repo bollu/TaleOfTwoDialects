@@ -56,7 +56,7 @@ void HiDialect::printType(mlir::Type t, mlir::DialectAsmPrinter &p) const {
 // === PTR DIALECT ===
 PtrDialect::PtrDialect(mlir::MLIRContext *context)
     : Dialect(getDialectNamespace(), context, TypeID::get<PtrDialect>()) {
-    addOperations<IntToPtrOp>();
+    addOperations<IntToPtrOp, HpnodeToPtrOp>();
     addTypes<VoidPtrType>();
 }
 
@@ -92,6 +92,23 @@ class HiTycon : public mlir::TypeConverter {
         // hi.hpnode -> ptr.void
         addConversion([](HpnodeType type) -> Type {
             return VoidPtrType::get(type.getContext());
+        });
+
+        // hi.hpnode -> !ptr.void
+        addTargetMaterialization([&](OpBuilder &rewriter, VoidPtrType resultty,
+                                     ValueRange vals,
+                                     Location loc) -> Optional<Value> {
+            if (vals.size() != 1 || !vals[0].getType().isa<IntegerType>()) {
+                return {};
+            }
+
+            HpnodeToPtrOp op = rewriter.create<HpnodeToPtrOp>(loc, vals[0]);
+            llvm::SmallPtrSet<Operation *, 1> exceptions;
+            exceptions.insert(op);
+
+            // vvv HACK/MLIRBUG: isn't this a hack? why do I need this?
+            // vals[0].replaceAllUsesExcept(op.getResult(), exceptions);
+            return op.getResult();
         });
 
         // int -> ptr.void
@@ -165,6 +182,98 @@ class HpStoreConversionPattern : public ConversionPattern {
     }
 };
 
+class HpAllocOpConversionPattern : public ConversionPattern {
+   public:
+    explicit HpAllocOpConversionPattern(TypeConverter &tc, MLIRContext *context)
+        : ConversionPattern(HpAllocOp::getOperationName(), 1, tc, context) {}
+
+    // mkConstructor: () -> !ptr.void
+    static FuncOp getOrInsertHpAlloc(PatternRewriter &rewriter,
+                                     ModuleOp module) {
+        const std::string name = "hpalloc_runtime";
+        if (FuncOp fn = module.lookupSymbol<FuncOp>(name)) {
+            return fn;
+        }
+
+        SmallVector<mlir::Type, 4> argTys = {};
+        mlir::Type retty = VoidPtrType::get(rewriter.getContext());
+
+        auto fntype = rewriter.getFunctionType(argTys, retty);
+        PatternRewriter::InsertionGuard insertGuard(rewriter);
+        rewriter.setInsertionPointToStart(module.getBody());
+
+        FuncOp fndecl =
+            rewriter.create<FuncOp>(rewriter.getUnknownLoc(), name, fntype);
+
+        fndecl.setPrivate();
+        return fndecl;
+    }
+
+    LogicalResult matchAndRewrite(
+        Operation *op, ArrayRef<Value> operands,
+        ConversionPatternRewriter &rewriter) const override {
+        FuncOp fn =
+            getOrInsertHpAlloc(rewriter, op->getParentOfType<ModuleOp>());
+
+        rewriter.setInsertionPointAfter(op);
+        rewriter.replaceOpWithNewOp<CallOp>(op, fn);
+
+        llvm::errs() << "\n====\n";
+        fn.getParentOp()->dump();
+        llvm::errs() << "\n===\n";
+        getchar();
+
+        return success();
+    }
+};
+
+class BadLoweringConversionPattern : public ConversionPattern {
+   public:
+    explicit BadLoweringConversionPattern(TypeConverter &tc,
+                                          MLIRContext *context)
+        : ConversionPattern(BadLoweringOp::getOperationName(), 1, tc, context) {
+    }
+
+    // badCall: (i1) -> ()
+    static FuncOp getOrInsertBadCall(PatternRewriter &rewriter,
+                                     ModuleOp module) {
+        const std::string name = "badcall";
+        if (FuncOp fn = module.lookupSymbol<FuncOp>(name)) {
+            return fn;
+        }
+
+        SmallVector<mlir::Type, 4> argTys = {rewriter.getI1Type()};
+        auto fntype = rewriter.getFunctionType(argTys, {});
+        PatternRewriter::InsertionGuard insertGuard(rewriter);
+        rewriter.setInsertionPointToStart(module.getBody());
+
+        FuncOp fndecl =
+            rewriter.create<FuncOp>(rewriter.getUnknownLoc(), name, fntype);
+
+        fndecl.setPrivate();
+        return fndecl;
+    }
+
+    LogicalResult matchAndRewrite(
+        Operation *op, ArrayRef<Value> operands,
+        ConversionPatternRewriter &rewriter) const override {
+        FuncOp fn =
+            getOrInsertBadCall(rewriter, op->getParentOfType<ModuleOp>());
+        rewriter.setInsertionPointAfter(op);
+        // we call it with an incorrect argument; ergo, a bad std.call
+        Value arg = rewriter.create<ConstantIntOp>(rewriter.getUnknownLoc(), 42,
+                                                   rewriter.getI64Type());
+        rewriter.replaceOpWithNewOp<CallOp>(op, fn, arg);
+
+        llvm::errs() << "\n====\n";
+        fn.getParentOp()->dump();
+        llvm::errs() << "\n===\n";
+        getchar();
+
+        return success();
+    }
+};
+
 struct LowerHiPass : public Pass {
     LowerHiPass() : Pass(mlir::TypeID::get<LowerHiPass>()){};
     StringRef getName() const override { return "LowerHiPass"; }
@@ -178,7 +287,7 @@ struct LowerHiPass : public Pass {
 
     void runOnOperation() override {
         assert(isa<ModuleOp>(getOperation()));
-        
+
         ConversionTarget target(getContext());
         target.addIllegalDialect<HiDialect>();
         target.addLegalDialect<StandardOpsDialect>();
@@ -192,6 +301,8 @@ struct LowerHiPass : public Pass {
         // applyPartialConversion | applyFullConversion
         mlir::OwningRewritePatternList patterns;
         patterns.insert<HpStoreConversionPattern>(tycon, &getContext());
+        patterns.insert<HpAllocOpConversionPattern>(tycon, &getContext());
+        patterns.insert<BadLoweringConversionPattern>(tycon, &getContext());
 
         if (failed(mlir::applyPartialConversion(getOperation(), target,
                                                 std::move(patterns)))) {
@@ -201,16 +312,18 @@ struct LowerHiPass : public Pass {
             signalPassFailure();
         };
 
-        llvm::errs() << "\n===Module after conversion, before vefication: ===\n";
+        llvm::errs()
+            << "\n===Module after conversion, before vefication: ===\n";
         getOperation()->dump();
 
         llvm::errs() << "\n===Verifying lowering...===\n";
-        // if (failed(mlir::verify(getOperation()))) {
-        //     llvm::errs() << "===Hi lowering failed at Verification===\n";
-        //     getOperation()->print(llvm::errs());
-        //     llvm::errs() << "\n===\n";
-        //     signalPassFailure();
-        // }
+        ModuleOp mod = cast<ModuleOp>(getOperation());
+        if (failed(mod.verify())) {
+            llvm::errs() << "===Hi lowering failed at Verification===\n";
+            getOperation()->print(llvm::errs());
+            llvm::errs() << "\n===\n";
+            signalPassFailure();
+        }
 
         ::llvm::DebugFlag = false;
     };

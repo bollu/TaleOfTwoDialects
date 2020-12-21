@@ -49,7 +49,8 @@ class HpnodeType
     static HpnodeType get(MLIRContext *context) { return Base::get(context); }
 };
 
-class HpAllocOp : public Op<HpAllocOp, OpTrait::OneResult, OpTrait::ZeroOperands> {
+class HpAllocOp
+    : public Op<HpAllocOp, OpTrait::OneResult, OpTrait::ZeroOperands> {
    public:
     using Op::Op;
     static StringRef getOperationName() { return "hi.hpAlloc"; };
@@ -63,7 +64,8 @@ class HpAllocOp : public Op<HpAllocOp, OpTrait::OneResult, OpTrait::ZeroOperands
     };
 };
 
-class HpStoreOp : public Op<HpStoreOp, OpTrait::OneResult, OpTrait::OneOperand> {
+class HpStoreOp
+    : public Op<HpStoreOp, OpTrait::OneResult, OpTrait::OneOperand> {
    public:
     using Op::Op;
     static StringRef getOperationName() { return "hi.hpStore"; };
@@ -82,7 +84,8 @@ class HpStoreOp : public Op<HpStoreOp, OpTrait::OneResult, OpTrait::OneOperand> 
     };
 };
 
-class BadLoweringOp : public Op<BadLoweringOp, OpTrait::ZeroResult, OpTrait::ZeroOperands> {
+class BadLoweringOp
+    : public Op<BadLoweringOp, OpTrait::ZeroResult, OpTrait::ZeroOperands> {
    public:
     using Op::Op;
     static StringRef getOperationName() { return "hi.badLowering"; };
@@ -93,7 +96,6 @@ class BadLoweringOp : public Op<BadLoweringOp, OpTrait::ZeroResult, OpTrait::Zer
         return success();
     };
 };
-
 
 // === PTR DIALECT ===
 // === PTR DIALECT ===
@@ -138,11 +140,40 @@ class IntToPtrOp
     using Op::Op;
     static StringRef getOperationName() { return "ptr.int2ptr"; };
     static void build(mlir::OpBuilder &builder, mlir::OperationState &state,
-                      Value vint) {
-        assert(vint.getType().isa<IntegerType>());
-        state.addOperands(vint);
+                      Value v) {
+        assert(v.getType().isa<IntegerType>());
+        state.addOperands(v);
         state.addTypes(VoidPtrType::get(builder.getContext()));
     }
+    void print(OpAsmPrinter &p) {
+        return p.printGenericOp(this->getOperation());
+    }
+};
+
+class HpnodeToPtrOp
+    : public Op<HpnodeToPtrOp, OpTrait::OneResult, OpTrait::OneOperand> {
+   public:
+    using Op::Op;
+    static StringRef getOperationName() { return "ptr.hpnode2ptr"; };
+    static void build(mlir::OpBuilder &builder, mlir::OperationState &state,
+                      Value v) {
+        assert(v.getType().isa<HpnodeType>());
+        state.addOperands(v);
+        state.addTypes(VoidPtrType::get(builder.getContext()));
+    }
+
+    static ParseResult parse(OpAsmParser &parser, OperationState &result) {
+        OpAsmParser::OperandType rand;  // ope'rand
+        if (parser.parseOperand(rand) ||
+            parser.resolveOperand(
+                rand, HpnodeType::get(parser.getBuilder().getContext()),
+                result.operands)) {
+            return failure();
+        }
+        result.addTypes(VoidPtrType::get(parser.getBuilder().getContext()));
+        return success();
+    };
+
     void print(OpAsmPrinter &p) {
         return p.printGenericOp(this->getOperation());
     }
