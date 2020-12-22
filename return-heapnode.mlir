@@ -9,9 +9,9 @@ module {
         return %x : !hi.hpnode
     }
 
-    func @main_return_void() -> !ptr.void {
-        %x = hi.hpAlloc
-        %y = ptr.hpnode2ptr %x
-        return %y : !ptr.void
-    }
+    // func @main_return_void() -> !ptr.void {
+    //     %x = hi.hpAlloc
+    //     %y = ptr.hpnode2ptr %x
+    //     return %y : !ptr.void
+    // }
 }
