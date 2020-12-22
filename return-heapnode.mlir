@@ -9,9 +9,9 @@ module {
         return %x : !hi.hpnode
     }
 
+    // private func @hp_alloc_runtime () -> !ptr.void
     // func @main_return_void() -> !ptr.void {
-    //     %x = hi.hpAlloc
-    //     %y = ptr.hpnode2ptr %x
-    //     return %y : !ptr.void
+    //     %x = call @hp_alloc_runtime()
+    //     return %x : !ptr.void
     // }
 }

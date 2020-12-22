@@ -54,6 +54,7 @@ void HiDialect::printType(mlir::Type t, mlir::DialectAsmPrinter &p) const {
 // === PTR DIALECT ===
 // === PTR DIALECT ===
 // === PTR DIALECT ===
+
 PtrDialect::PtrDialect(mlir::MLIRContext *context)
     : Dialect(getDialectNamespace(), context, TypeID::get<PtrDialect>()) {
     addOperations<IntToPtrOp, HpnodeToPtrOp>();
@@ -135,6 +136,69 @@ class HiTycon : public mlir::TypeConverter {
     }
 };
 
+// https://github.com/spcl/open-earth-compiler/blob/master/lib/Conversion/StencilToStandard/ConvertStencilToStandard.cpp#L45
+class FuncOpLowering : public ConversionPattern {
+   public:
+    explicit FuncOpLowering(TypeConverter &tc, MLIRContext *context)
+        : ConversionPattern(FuncOp::getOperationName(), 1, tc, context) {}
+
+    LogicalResult matchAndRewrite(
+        Operation *operation, ArrayRef<Value> operands,
+        ConversionPatternRewriter &rewriter) const override {
+        auto loc = operation->getLoc();
+        auto funcOp = cast<FuncOp>(operation);
+
+        TypeConverter::SignatureConversion inputs(funcOp.getNumArguments());
+        for (auto &en : llvm::enumerate(funcOp.getType().getInputs()))
+            inputs.addInputs(en.index(),
+                             typeConverter->convertType(en.value()));
+
+        TypeConverter::SignatureConversion results(funcOp.getNumResults());
+        for (auto &en : llvm::enumerate(funcOp.getType().getResults()))
+            results.addInputs(en.index(),
+                              typeConverter->convertType(en.value()));
+
+        auto funcType =
+            FunctionType::get(inputs.getConvertedTypes(),
+                              results.getConvertedTypes(), funcOp.getContext());
+
+        // Replace the function by a function with an updated signature
+        auto newFuncOp = rewriter.create<FuncOp>(loc, funcOp.getName(),
+                                                 funcType, llvm::None);
+        rewriter.inlineRegionBefore(funcOp.getBody(), newFuncOp.getBody(),
+                                    newFuncOp.end());
+
+        // Convert the signature and delete the original operation
+        rewriter.applySignatureConversion(&newFuncOp.getBody(), results);
+        rewriter.eraseOp(funcOp);
+        return success();
+    }
+};
+
+class ReturnOpLowering : public ConversionPattern {
+   public:
+    explicit ReturnOpLowering(TypeConverter &tc, MLIRContext *context)
+        : ConversionPattern(ReturnOp::getOperationName(), 1, tc, context) {}
+
+    LogicalResult matchAndRewrite(
+        Operation *operation, ArrayRef<Value> operands,
+        ConversionPatternRewriter &rewriter) const override {
+        auto loc = operation->getLoc();
+        auto retOp = cast<ReturnOp>(operation);
+
+        // TypeConverter::SignatureConversion inputs(retOp.getNumOperands());
+        // for (auto &en : llvm::enumerate(retOp.getOperandTypes()))
+        //     inputs.addInputs(en.index(),
+        //                      typeConverter->convertType(en.value()));
+
+        // Replace the function by a function with an updated signature
+        auto newRetOp = rewriter.create<ReturnOp>(loc, operands);
+        rewriter.eraseOp(operation);
+        // rewriter.replaceOp(operation, newRetOp);
+        return success();
+    }
+};
+
 class HpStoreConversionPattern : public ConversionPattern {
    public:
     explicit HpStoreConversionPattern(TypeConverter &tc, MLIRContext *context)
@@ -170,12 +234,17 @@ class HpStoreConversionPattern : public ConversionPattern {
 
         FuncOp fn =
             getOrInsertHpStore(rewriter, op->getParentOfType<ModuleOp>());
-        rewriter.setInsertionPointAfter(store);
-        rewriter.replaceOpWithNewOp<CallOp>(store, fn, store.getOperand());
 
-        llvm::errs() << "\n====\n";
+        llvm::errs() << "\nvvvvHpStoreConversionPattern beforevvvv\n";
         fn.getParentOp()->dump();
-        llvm::errs() << "\n===\n";
+
+        rewriter.setInsertionPointAfter(store);
+        CallOp call = rewriter.create<CallOp>(store.getLoc(), fn, operands);
+        rewriter.replaceOp(store, call.getResults());
+
+        llvm::errs() << "\n===after===\n";
+        fn.getParentOp()->dump();
+        llvm::errs() << "\n^^^^\n";
         getchar();
 
         return success();
@@ -215,12 +284,16 @@ class HpAllocOpConversionPattern : public ConversionPattern {
         FuncOp fn =
             getOrInsertHpAlloc(rewriter, op->getParentOfType<ModuleOp>());
 
-        rewriter.setInsertionPointAfter(op);
-        rewriter.replaceOpWithNewOp<CallOp>(op, fn);
-
-        llvm::errs() << "\n====\n";
+        llvm::errs() << "\nvvvvvHpAllocOp before:vvvvv:\n";
         fn.getParentOp()->dump();
-        llvm::errs() << "\n===\n";
+
+        rewriter.setInsertionPointAfter(op);
+        CallOp call = rewriter.create<CallOp>(op->getLoc(), fn);
+        rewriter.replaceOp(op, call.getResults());
+
+        llvm::errs() << "\n====after:====\n";
+        fn.getParentOp()->dump();
+        llvm::errs() << "\n^^^^^^\n";
         getchar();
 
         return success();
@@ -259,15 +332,20 @@ class BadLoweringConversionPattern : public ConversionPattern {
         ConversionPatternRewriter &rewriter) const override {
         FuncOp fn =
             getOrInsertBadCall(rewriter, op->getParentOfType<ModuleOp>());
+
+        llvm::errs() << "\nvvvvvBadLowering before:vvvvv\n";
+        fn.getParentOp()->dump();
+
         rewriter.setInsertionPointAfter(op);
         // we call it with an incorrect argument; ergo, a bad std.call
         Value arg = rewriter.create<ConstantIntOp>(rewriter.getUnknownLoc(), 42,
                                                    rewriter.getI64Type());
-        rewriter.replaceOpWithNewOp<CallOp>(op, fn, arg);
+        CallOp call = rewriter.create<CallOp>(op->getLoc(), fn, operands);
+        rewriter.replaceOp(op, call.getResults());
 
-        llvm::errs() << "\n====\n";
+        llvm::errs() << "\n====after:====\n";
         fn.getParentOp()->dump();
-        llvm::errs() << "\n===\n";
+        llvm::errs() << "\n^^^^^\n";
         getchar();
 
         return success();
@@ -294,18 +372,41 @@ struct LowerHiPass : public Pass {
         target.addLegalDialect<PtrDialect>();
         target.addLegalDialect<scf::SCFDialect>();
         target.addLegalOp<ModuleOp, ModuleTerminatorOp, FuncOp>();
-        ::llvm::DebugFlag = true;
+
+        target.addDynamicallyLegalOp<FuncOp>([](FuncOp funcOp) {
+            auto funcType = funcOp.getType();
+            for (auto &arg : llvm::enumerate(funcType.getInputs())) {
+                if (arg.value().isa<HiType>()) return false;
+            }
+            for (auto &arg : llvm::enumerate(funcType.getResults())) {
+                if (arg.value().isa<HiType>()) return false;
+            }
+            return true;
+        });
+
+        target.addDynamicallyLegalOp<ReturnOp>([](ReturnOp ret) {
+            auto retty = ret.getOperandTypes();
+            for (Value arg : ret.getOperands()) {
+                if (arg.getType().isa<HiType>()) return false;
+            }
+            return true;
+        });
 
         HiTycon tycon(&getContext());
+
+
+        ::llvm::DebugFlag = true;
 
         // applyPartialConversion | applyFullConversion
         mlir::OwningRewritePatternList patterns;
         patterns.insert<HpStoreConversionPattern>(tycon, &getContext());
         patterns.insert<HpAllocOpConversionPattern>(tycon, &getContext());
         patterns.insert<BadLoweringConversionPattern>(tycon, &getContext());
+        patterns.insert<FuncOpLowering>(tycon, &getContext());
+        patterns.insert<ReturnOpLowering>(tycon, &getContext());
 
         if (failed(mlir::applyFullConversion(getOperation(), target,
-                                                std::move(patterns)))) {
+                                             std::move(patterns)))) {
             llvm::errs() << "\n===Hi lowering failed at Conversion===\n";
             getOperation()->print(llvm::errs());
             llvm::errs() << "\n===\n";
@@ -313,7 +414,7 @@ struct LowerHiPass : public Pass {
         };
 
         llvm::errs()
-            << "\n===Module after conversion, before vefication: ===\n";
+            << "\n===Module after conversion, before verification: ===\n";
         getOperation()->dump();
 
         llvm::errs() << "\n===Verifying lowering...===\n";

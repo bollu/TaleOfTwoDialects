@@ -37,8 +37,6 @@ const char *__asan_default_options() { return "detect_leaks=0"; }
 
 int main(int argc, char **argv) {
   mlir::registerAllPasses();
-  // mlir::standalone::registerWorkerWrapperPass();
-  // registerLzInterpretPass();
   mlir::DialectRegistry registry;
 
   registry.insert<mlir::HiDialect>();

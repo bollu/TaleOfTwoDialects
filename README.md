@@ -145,3 +145,17 @@ return-heapnode.mlir:9:9: note: see existing live user here: return %0 : !hi.hpn
 
 
 - `The result values of the two ops must be the same types.` :(
+
+
+
+Am I supposed to call the conversion directly? Seems unlikely:
+
+```cpp
+[I] /home/bollu/work/mlir/llvm-project/mlir > ag materializeTargetConversion
+lib/Transforms/Utils/DialectConversion.cpp
+1073:      newOperand = converter->materializeTargetConversion(
+
+include/mlir/Transforms/DialectConversion.h
+216:  Value materializeTargetConversion(OpBuilder &builder, Location loc,
+[I] /home/bollu/work/mlir/llvm-project/mlir >
+```
