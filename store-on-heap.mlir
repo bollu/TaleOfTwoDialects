@@ -1,3 +1,4 @@
+// RUN: ./mir.out %s
 module {
     func @main() {
         %x = constant 42 : i64

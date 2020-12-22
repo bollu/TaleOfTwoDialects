@@ -29,7 +29,7 @@ namespace mlir {
 
 HiDialect::HiDialect(mlir::MLIRContext *context)
     : Dialect(getDialectNamespace(), context, TypeID::get<HiDialect>()) {
-    addOperations<HpAllocOp, HpStoreOp, BadLoweringOp>();
+    addOperations<HpAllocOp, HpStoreOp, BadLoweringOp, NoLoweringOp>();
     addTypes<HpnodeType>();
 }
 
@@ -163,13 +163,13 @@ class FuncOpLowering : public ConversionPattern {
                               results.getConvertedTypes(), funcOp.getContext());
 
         // Replace the function by a function with an updated signature
-        auto newFuncOp = rewriter.create<FuncOp>(loc, funcOp.getName(),
-                                                 funcType, llvm::None);
+        auto newFuncOp =
+            rewriter.create<FuncOp>(loc, funcOp.getName(), funcType);
         rewriter.inlineRegionBefore(funcOp.getBody(), newFuncOp.getBody(),
                                     newFuncOp.end());
 
         // Convert the signature and delete the original operation
-        rewriter.applySignatureConversion(&newFuncOp.getBody(), results);
+        rewriter.applySignatureConversion(&newFuncOp.getBody(), inputs);
         rewriter.eraseOp(funcOp);
         return success();
     }
@@ -393,7 +393,6 @@ struct LowerHiPass : public Pass {
         });
 
         HiTycon tycon(&getContext());
-
 
         ::llvm::DebugFlag = true;
 

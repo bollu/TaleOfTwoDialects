@@ -98,7 +98,7 @@ class BadLoweringOp
 };
 
 class NoLoweringOp
-    : public Op<BadLoweringOp, OpTrait::ZeroResult, OpTrait::ZeroOperands> {
+    : public Op<NoLoweringOp, OpTrait::ZeroResult, OpTrait::ZeroOperands> {
    public:
     using Op::Op;
     static StringRef getOperationName() { return "hi.noLowering"; };

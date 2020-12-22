@@ -1,4 +1,5 @@
 // We cant replace `%x` because it maybe used by others (eg. `%y`)
+// RUN: ./mir.out %s
 module {
     func @main() {
         %x = constant -42 : i64

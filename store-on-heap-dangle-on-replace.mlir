@@ -2,6 +2,7 @@
 // we can create dangling IR. In this care, the argument for hpStore will be
 // <<UNKNOWN SSA VALUE>> since we are forced to back out of the rewrite on
 // encountering the `hi.noLowering` AFTER having already overwritten the use `%x`.
+// RUN: ./mir.out %s
 module {
     func @main() {
         %x = constant 42 : i64
